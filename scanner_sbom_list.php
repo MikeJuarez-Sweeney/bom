@@ -2,7 +2,8 @@
   $nav_selected = "SCANNER";
   $left_buttons = "YES";
   $left_selected = "SOFTWAREBOM";
-
+   
+  include "get_scope.php";
   include("./nav.php");
 
   //PDO connection
@@ -16,6 +17,10 @@
 <?php
   $cookie_name = 'preference';
   global $pref_err;
+  $def = "false";
+  $DEFAULT_SCOPE_FOR_RELEASES = getScope($db);
+  $scopeArray = array();
+
 
   /*----------------- FUNCTION TO GET BOMS -----------------*/
   function getBoms($db) {
@@ -25,7 +30,7 @@
     if ($result->num_rows > 0) {
       // output data of each row
       while($row = $result->fetch_assoc()) {
-        echo '<tr>
+        echo '<tr class="dataTableRow">
           <td>'.$row["row_id"].'</td>
           <td><a class="btn" href="scanner_sbom_tree.php?id='.$row["app_id"].'">'.$row["app_id"].' </a> </td>
           <td>'.$row["app_name"].'</td>
@@ -50,6 +55,23 @@
       echo "0 results";
     }//end else
     $result->close();
+  }
+
+  function getFilterArray($db) {
+    global $scopeArray;
+    global $pdo;
+    global $DEFAULT_SCOPE_FOR_RELEASES;
+
+    $sql = "SELECT * FROM releases WHERE tag LIKE ?";
+    foreach($DEFAULT_SCOPE_FOR_RELEASES as $currentTag){
+      $sqlTag = $pdo->prepare($sql);
+      $sqlTag->execute([$currentTag]);
+      if ($sqlTag->rowCount() > 0) {
+        while($row = $sqlTag->fetch(PDO::FETCH_ASSOC)){
+          array_push($scopeArray, $row["app_id"]);
+        }
+      }
+    }
   }
 
   //Display error if user retrieves preferences w/o any cookies set
@@ -147,10 +169,14 @@
           }
         }//if no preference cookie is set but user clicks "show my BOMS"
         elseif(isset($_POST['getpref']) && !isset($_COOKIE[$cookie_name])) {
+          $def = "false";
           getBoms($db);
-        }//if no preference cookie is set show all BOMS
+        }//if no preference cookie is set show default BOMS (some rows are hidden depending on tag preferences)
         else {
+          $def = "true";
           getBoms($db);
+          getFilterArray($db);
+          
         }
       ?>
       </tbody>
@@ -204,6 +230,31 @@
         fixedHeader: true,
         retrieve: true
       } );
+
+      /* 
+      * If the default scope is to be used then this will iterate through
+      * each row of the datatable and hide any rows whose app_id does not
+      * match a release who's tag is not in the default scope
+      */
+      
+      var def = <?php echo json_encode($def); ?>;
+      var app_id = <?php echo json_encode($scopeArray); ?>;
+
+      if (def === "true") {
+        var indexes = table.rows().indexes().filter(
+          function (value, index) {
+            var currentID = table.row(value).data()[1];
+            var currentIDString = JSON.stringify(currentID);
+            for (var i = 0; i < 3; i++){
+            if (currentIDString.includes(app_id[i])) {
+              return false;
+              break;
+              } 
+            }
+            return true;
+          });
+        table.rows(indexes).remove().draw();
+     }
     } );
   </script>
 
@@ -212,4 +263,4 @@
      display: table-header-group;
    }
  </style>
-<?php include("./footer.php"); ?>
+<?php include("./footer.php");?>

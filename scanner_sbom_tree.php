@@ -4,7 +4,42 @@
   $left_buttons = "YES";
   $left_selected = "SBOMTREE";
   include("./nav.php");
+  include "get_scope.php";
+
+  //PDO connection
+  $servername = 'localhost';
+  $dbname = 'bom';
+  $username = 'root';
+  $password = '';
+  $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+  
+  $DEFAULT_SCOPE_FOR_RELEASES = getScope($db);
+  $scopeArray = array();
+
+  function getFilterArray($db) {
+    global $scopeArray;
+    global $pdo;
+    global $DEFAULT_SCOPE_FOR_RELEASES;
+
+    $sql = "SELECT * FROM releases WHERE tag LIKE ?";
+    foreach($DEFAULT_SCOPE_FOR_RELEASES as $currentTag){
+      $sqlTag = $pdo->prepare($sql);
+      $sqlTag->execute([$currentTag]);
+      if ($sqlTag->rowCount() > 0) {
+        while($row = $sqlTag->fetch(PDO::FETCH_ASSOC)){
+          array_push($scopeArray, $row["app_id"]);
+        }
+      }
+    }
+  }
  ?>
+
+ <style>
+ .hidden{
+   display:none;
+ }
+ </style>
+
 <div class="right-content">
     <div class="container" id="container">
         <h3 style="color: #01B0F1;">Scanner --> BOM Tree</h3>
@@ -17,6 +52,7 @@
                     <li><a href="#" id ="showYellow" >Show <span class="glyphicon glyphicon-tint" style='color:#ffd966;'> </span>Yellow</a></li>
                     <li><a href="#" id ="showRed" >Show <span class="glyphicon glyphicon-tint" style='color:#ff6666;'> </span>Red</a></li>
                     <li><a href="#" id = "showRedYellow" > Show <span class="glyphicon glyphicon-tint" style='color:#ff6666;'></span>Red and <span class="glyphicon glyphicon-tint" style='color:#ffd966;'></span>Yellow</a></li>
+                    <li><a href="#" id = "showAllBOMS" >Show All BOMS</a></li>
                     <li><div class="input-group">
                       <input type="text" id="input" class="form-control" placeholder="Where Used" >
                       <div class="input-group-btn">
@@ -43,6 +79,7 @@
                   <th>Notes</th>
                 </thead>
           <?php
+            getFilterArray($db); //Create filter array for scope filtering
             $getAppId = null;
             $findApp = false;
             if (isset($_GET['id'])){
@@ -62,6 +99,7 @@
             
             if ($findApp) {
               $sql_parent = "SELECT DISTINCT app_name as name, 
+                              app_id,
                               app_version as version, 
                               app_status as status, 
                               '' as cmp_type, 
@@ -77,7 +115,8 @@
                               from sbom  
                               where app_id = '".$getAppId."';";
             } else if ($findAppName) {
-              $sql_parent = "SELECT DISTINCT app_name as name, 
+              $sql_parent = "SELECT DISTINCT app_name as name,
+                              app_id, 
                               app_version as version, 
                               app_status as status, 
                               '' as cmp_type, 
@@ -94,7 +133,7 @@
                               where app_name = '".$getAppName."' 
                               and app_version = '".$getAppVer."' ;";
             } else {
-              $sql_parent = "SELECT DISTINCT app_name as name, app_version as version, app_status as status, CASE WHEN app_name in (select distinct cmp_name from sbom where cmp_version = version and cmp_name = name) THEN 'child' ELSE 'parent' END AS class, CASE WHEN app_name in (select distinct cmp_name from sbom where cmp_version = version and cmp_name = name) THEN 'yellow' ELSE 'red' END AS div_class from sbom";
+              $sql_parent = "SELECT DISTINCT app_name as name, app_id, app_version as version, app_status as status, CASE WHEN app_name in (select distinct cmp_name from sbom where cmp_version = version and cmp_name = name) THEN 'child' ELSE 'parent' END AS class, CASE WHEN app_name in (select distinct cmp_name from sbom where cmp_version = version and cmp_name = name) THEN 'yellow' ELSE 'red' END AS div_class from sbom";
              }
             $result_parent = $db->query($sql_parent);
             $p=1;
@@ -108,7 +147,11 @@
                 $app_status = $row_parent["status"];
                 $div_class = $row_parent["div_class"];
                 $p_id = $p;
-                echo "<tbody class= '".$div_class."'><tr data-tt-id = '".$p_id."' ><td class='text-capitalize'> <div class = 'btn ".$class."' ><span class = 'app_name' style = 'max-width: 160em; white-space: pre-wrap; word-wrap: break-word; word-break: break-all;'>".$app_name."</span>&nbsp; &nbsp;&nbsp; &nbsp;</div></td><td >".$app_version."</td><td class='text-capitalize'>".$app_status."</td><td/><td/><td/><td/></tr>";
+                if (in_array($row_parent["app_id"], $scopeArray)) {
+                  echo "<tbody class= '".$div_class."'><tr data-tt-id = '".$p_id."' ><td class='text-capitalize'> <div class = 'btn ".$class."' ><span class = 'app_name' style = 'max-width: 160em; white-space: pre-wrap; word-wrap: break-word; word-break: break-all;'>".$app_name."</span>&nbsp; &nbsp;&nbsp; &nbsp;</div></td><td >".$app_version."</td><td class='text-capitalize'>".$app_status."</td><td/><td/><td/><td/></tr>";
+                } else {
+                echo "<tbody class= 'hidden'><tr data-tt-id = '".$p_id."' ><td class='text-capitalize'> <div class = 'btn ".$class."' ><span class = 'app_name' style = 'max-width: 160em; white-space: pre-wrap; word-wrap: break-word; word-break: break-all;'>".$app_name."</span>&nbsp; &nbsp;&nbsp; &nbsp;</div></td><td >".$app_version."</td><td class='text-capitalize'>".$app_status."</td><td/><td/><td/><td/></tr>";
+                }
                 $p++;
                       // output data of child
                       $sql_child = "SELECT DISTINCT cmp_name as cmpname, cmp_type, cmp_version as cmpver, request_step,cmp_status, request_status, notes, CASE WHEN cmp_name in (select distinct app_name from sbom where app_name = cmpname and app_version = cmpver) THEN 'child' ELSE 'grandchild' END AS class from sbom where app_name = '".$app_name."' and app_version = '".$app_version."' and app_status = '".$app_status."'";
@@ -201,6 +244,18 @@
           $("div .red").show();
         });
       });
+
+      $(document).ready(function(){
+        //click showAllBOMS to show all hidden parent nodes
+        $("#showAllBOMS").click(function(){
+          
+          var hiddenRowArray = document.getElementsByClassName("hidden");
+          for (var i = (hiddenRowArray.length - 1); i >= 0; i--) {
+            hiddenRowArray[i].className = "";
+          } 
+        });
+      });
+
       $(document).ready(function() {
         //input search for where used
         $('#input').on('keyup', function() {
