@@ -2,7 +2,7 @@
   $nav_selected = "SCANNER";
   $left_buttons = "YES";
   $left_selected = "SOFTWAREBOM";
-   
+
   include "get_scope.php";
   include("./nav.php");
 
@@ -12,15 +12,16 @@
   $username = 'root';
   $password = '';
   $pdo = new PDO("mysql:host=$servername;dbname=$dbname", $username, $password);
+ 
+  $def = "false";
+  $DEFAULT_SCOPE_FOR_RELEASES = getScope($db);
+  $scopeArray = array();
 ?>
+
 
 <?php
   $cookie_name = 'preference';
   global $pref_err;
-  $def = "false";
-  $DEFAULT_SCOPE_FOR_RELEASES = getScope($db);
-  $scopeArray = array();
-
 
   /*----------------- FUNCTION TO GET BOMS -----------------*/
   function getBoms($db) {
@@ -30,7 +31,7 @@
     if ($result->num_rows > 0) {
       // output data of each row
       while($row = $result->fetch_assoc()) {
-        echo '<tr class="dataTableRow">
+        echo '<tr>
           <td>'.$row["row_id"].'</td>
           <td><a class="btn" href="scanner_sbom_tree.php?id='.$row["app_id"].'">'.$row["app_id"].' </a> </td>
           <td>'.$row["app_name"].'</td>
@@ -138,9 +139,11 @@
         /*----------------- GET PREFERENCE COOKIE -----------------*/
         //if user clicks "get all BOMS", retrieve all BOMS
         if(isset($_POST['getall'])) {
+          $def = "false";
           getBoms($db);
         }//default if preference cookie is set, display user BOM preferences
         elseif(isset($_COOKIE[$cookie_name]) || isset($_COOKIE[$cookie_name]) && isset($_POST['getpref'])) {
+          $def = "false";
           $prep = rtrim(str_repeat('?,', count(json_decode($_COOKIE[$cookie_name]))), ',');
           $sql = 'SELECT * FROM sbom WHERE app_id IN ('.$prep.')';
           $pref = $pdo->prepare($sql);
@@ -163,7 +166,7 @@
               <td>'.$row["request_status"].'</td>
               <td>'.$row["request_step"].'</td>
               <td>'.$row["notes"].' </span> </td>
-              <td>'.$row["requester"].'</td>
+              <td>'.$row["requestor"].'</td>
               <td>'.$row["color"].'</td>
             </tr>';
           }
@@ -171,12 +174,11 @@
         elseif(isset($_POST['getpref']) && !isset($_COOKIE[$cookie_name])) {
           $def = "false";
           getBoms($db);
-        }//if no preference cookie is set show default BOMS (some rows are hidden depending on tag preferences)
+        }//if no preference cookie is set show all BOMS
         else {
-          $def = "true";
-          getBoms($db);
-          getFilterArray($db);
-          
+         $def = "true";
+         getBoms($db);
+         getFilterArray($db);
         }
       ?>
       </tbody>
@@ -263,4 +265,4 @@
      display: table-header-group;
    }
  </style>
-<?php include("./footer.php");?>
+<?php include("./footer.php"); ?>
