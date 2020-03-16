@@ -1,7 +1,7 @@
 <?php
 
 function getScope ($db){
-    $sql = "SELECT * from preferences;";
+    $sql = "SELECT * from scope_preferences;";
     $result = $db->query($sql);
     $output = array();
 

@@ -8,7 +8,7 @@
   function updateTags($db)
 {
     global $newTag;
-    $sql = "UPDATE preferences
+    $sql = "UPDATE scope_preferences
             SET default_scope = '$newTag'
             WHERE preference_id = 0;";
     $result = $db->query($sql);
